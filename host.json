@@ -1,0 +1,22 @@
+{
+  "version": "2.0",
+    "extensions": {
+        "eventHubs": {
+            "maxEventBatchSize" : 10000,
+            "minEventBatchSize" : 100,
+            "maxWaitTime" : "00:01:00"
+        }
+  },
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      }
+    }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  }
+}
