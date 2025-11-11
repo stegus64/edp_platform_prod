@@ -7,7 +7,7 @@ import azure.functions as func
 import duckdb
 from datetime import datetime
 
-from shared import write_with_retry, upload_to_inbound_storage
+from shared import write_with_retry, upload_to_inbound_storage, schema
 
 app = func.Blueprint()
 
@@ -53,7 +53,7 @@ def _query_df(query: str):
     with duckdb.connect(database=':memory:', read_only=False) as con:
         # (Optional) tweak parallelism inside DuckDB if desired:
         # con.execute("PRAGMA threads=4")
-        return con.execute(query).df()
+        return con.execute(query).arrow()
 
 def _transform_buckets(ndjson_path: str):
     """
@@ -229,6 +229,17 @@ def _transform_payments(ndjson_path: str):
     
     return result
 
+def _transform_raw(ndjson_path: str):
+    query = f"""
+    SELECT *
+    FROM read_json('{ndjson_path}',
+        columns = {schema.orderupdate_schema}
+    );
+    """
+    result = _query_df(query)
+    return result
+
+
 def store_deadletter(ndjson_path: str, prefix: str) -> None:
     """Upload a deadletter file with stage name, UTC timestamp, and optional sequence range."""
 
@@ -314,12 +325,20 @@ def eventhub_trigger(event: List[func.EventHubEvent]) -> None:
                 write_with_retry(payments_df, table="orderupdates_paymentstream", source="Tables/stream")
                 return "payments done"
             
+            @deadletter_on_exception(f"raw_{seq_start}-{seq_end}", ndjson_path)
+            def process_raw():
+                raw_df = _transform_raw(ndjson_path)
+                #logging.info("Raw stream produced %d row(s).", len(raw_df))
+                write_with_retry(raw_df, table="orderupdates_rawstream", source="Tables/stream")
+                return "raw done"
+            
             # Run in parallel
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                 futures = [
                     executor.submit(process_buckets),
                     executor.submit(process_orders),
                     executor.submit(process_payments),
+                    executor.submit(process_raw),
                 ]
                 for future in concurrent.futures.as_completed(futures):
                     logging.info(future.result())
