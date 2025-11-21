@@ -1,10 +1,11 @@
 {
   "version": "2.0",
+  "functionTimeout": "00:10:00",
     "extensions": {
         "eventHubs": {
             "maxEventBatchSize" : 10000,
-            "minEventBatchSize" : 100,
-            "maxWaitTime" : "00:01:00"
+            "minEventBatchSize" : 2000,
+            "maxWaitTime" : "00:02:00"
         }
   },
   "logging": {

@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "eventhub_connectionstring": "Endpoint=sb://evhnspipocdev001.****",
+    "table_suffix": "-local"
+  }
+}

@@ -16,6 +16,7 @@ app = func.Blueprint()
 EVENT_HUB_NAME = "evh-orderupdated-prod"
 EVENT_HUB_CONN = "eventhub_connectionstring"
 EVENT_HUB_CONSUMER = os.getenv('eventhub_consumer_group_4', 'func-edp-prod-local')
+TABLE_SUFFIX = os.getenv('table_suffix', "")
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -46,25 +47,10 @@ def _write_ndjson_temp_with_meta(events: Iterable[func.EventHubEvent], path: str
             f.write(body_str.encode("utf-8"))
             f.write(b"\n")
 
-# ---------- DuckDB helper (per-thread connection) ----------
-def _query_df(query: str):
-    # Independent connection per task/thread
-    # ':memory:' is fine because we're reading from a file path, not a DB file.
-    with duckdb.connect(database=':memory:', read_only=False) as con:
-        # (Optional) tweak parallelism inside DuckDB if desired:
-        # con.execute("PRAGMA threads=4")
-        return con.execute(query).arrow()
-
-def _transform_buckets(ndjson_path: str):
-    """
-    Run DuckDB SQL to explode nested arrays and project fields into a tabular dataframe.
-    Returns a pandas.DataFrame (DuckDB .df()) suitable for write_delta.
-    """
-
-    query = f"""
-    WITH src AS (
+BUCKET_QUERY = f"""
+    WITH base AS (
       SELECT *
-      FROM read_json_auto('{ndjson_path}')
+      FROM src
     ),
     bucket_explode AS (
       SELECT
@@ -110,7 +96,7 @@ def _transform_buckets(ndjson_path: str):
         -- ingestion metadata
         CAST(e.EventEnqueuedUtcTime || ' UTC' AS TIMESTAMPTZ)                                 AS source_updated_datetime,
         CURRENT_TIMESTAMP                                                                      AS updated_datetime
-      FROM src AS e
+      FROM base AS e
       -- Inner expansion (drop rows when arrays are empty/null). Use LEFT JOIN ... ON TRUE to preserve.
       CROSS JOIN UNNEST(e.buckets)     AS b(bucket)
       CROSS JOIN UNNEST(b.bucket.rows) AS r(row)
@@ -118,18 +104,8 @@ def _transform_buckets(ndjson_path: str):
     SELECT *
     FROM bucket_explode;
     """
-    
-    result = _query_df(query)
-    
-    return result
 
-
-def _transform_orders(ndjson_path: str):
-    """
-    Re-creates the 'order_explode' streaming query against the same JSON source.
-    """
-
-    query = f"""
+ORDER_QUERY = f"""
     WITH order_explode AS (
       SELECT
         -- Business key
@@ -138,7 +114,7 @@ def _transform_orders(ndjson_path: str):
         -- Scalars from event
         e.orderNumber,
         e.status.value                                  AS status_value,
-        e.orderDate                                     AS orderDate,
+        CAST(e.orderDate AS TIMESTAMPTZ)                AS orderDate,
         e.salesBrand,
         e.country,
         e.currency,
@@ -182,19 +158,13 @@ def _transform_orders(ndjson_path: str):
         -- Ingestion/processing times
         CAST(e.EventEnqueuedUtcTime || ' UTC' AS TIMESTAMPTZ) AS EventEnqueuedUtcTime,
         CURRENT_TIMESTAMP                               AS updated_datetime
-      FROM read_json_auto('{ndjson_path}') AS e
+      FROM src AS e
     )
     SELECT *
     FROM order_explode;
     """    
-    result = _query_df(query)
-    
-    return result
 
-
-def _transform_payments(ndjson_path: str):
-
-    query = f"""
+PAYMENT_QUERY = f"""
     WITH payment_explode AS (
       SELECT
         e.orderNumber                                     AS order_bk,
@@ -219,25 +189,17 @@ def _transform_payments(ndjson_path: str):
 
         CAST(e.EventEnqueuedUtcTime || ' UTC' AS TIMESTAMPTZ) AS EventEnqueuedUtcTime,
         CURRENT_TIMESTAMP                                 AS updated_datetime
-      FROM read_json_auto('{ndjson_path}') AS e
+      FROM src AS e
       CROSS JOIN UNNEST(e.payments) AS p(payment)
     )
     SELECT * FROM payment_explode;
     """
-    
-    result = _query_df(query)
-    
-    return result
 
-def _transform_raw(ndjson_path: str):
-    query = f"""
+RAW_QUERY = f"""
     SELECT *
-    FROM read_json('{ndjson_path}',
-        columns = {schema.orderupdate_schema}
-    );
+    FROM src
+    ;
     """
-    result = _query_df(query)
-    return result
 
 
 def store_deadletter(ndjson_path: str, prefix: str) -> None:
@@ -266,6 +228,27 @@ def deadletter_on_exception(prefix: str, ndjson_path: str):
                 raise
         return _inner
     return _wrap
+
+def run_transforms(ndjson_path: str):
+    with duckdb.connect(database=':memory:', read_only=False) as con:
+        # Let DuckDB use all cores internally
+        con.execute("PRAGMA threads=%d" % os.cpu_count())
+
+        # One schema-based read of the JSON (no auto)
+        con.execute(f"""
+            CREATE VIEW src AS
+            SELECT *
+            FROM read_json('{ndjson_path}',
+                columns = {schema.orderupdate_schema}
+            );
+        """)
+
+        bucket_df   = con.execute(BUCKET_QUERY).fetch_arrow_table()
+        orders_df   = con.execute(ORDER_QUERY).fetch_arrow_table()
+        payments_df = con.execute(PAYMENT_QUERY).fetch_arrow_table()
+        # raw_df    = con.execute(RAW_QUERY).arrow() 
+
+    return bucket_df, orders_df, payments_df #, raw_df
 
 # --- Trigger ----------------------------------------------------------------
 
@@ -304,44 +287,30 @@ def eventhub_trigger(event: List[func.EventHubEvent]) -> None:
         _write_ndjson_temp_with_meta(event, path=ndjson_path)
         try:
             
-            @deadletter_on_exception(f"buckets_{seq_start}-{seq_end}", ndjson_path)
-            def process_buckets():
-                bucket_df = _transform_buckets(ndjson_path)
-                # logging.info("Bucket explode produced %d row(s).", len(bucket_df))
-                write_with_retry(bucket_df, table="orderupdates_rowstream", source="Tables/stream")
-                return "buckets done"
+            logging.info("Running transforms on events...")
+            bucket_df, orders_df, payments_df = run_transforms(ndjson_path)
+            logging.info("Transforms completed. Writing to Delta Lake...")
             
-            @deadletter_on_exception(f"orders_{seq_start}-{seq_end}", ndjson_path)
-            def process_orders():
-                orders_df = _transform_orders(ndjson_path)
-                # logging.info("Order stream produced %d row(s).", len(orders_df))
-                write_with_retry(orders_df, table="orderupdates_orderstream", source="Tables/stream")
-                return "orders done"
-            
-            @deadletter_on_exception(f"payments_{seq_start}-{seq_end}", ndjson_path)
-            def process_payments():
-                payments_df = _transform_payments(ndjson_path)
-                # logging.info("Payment stream produced %d row(s).", len(payments_df))
-                write_with_retry(payments_df, table="orderupdates_paymentstream", source="Tables/stream")
-                return "payments done"
-            
-            @deadletter_on_exception(f"raw_{seq_start}-{seq_end}", ndjson_path)
-            def process_raw():
-                raw_df = _transform_raw(ndjson_path)
-                #logging.info("Raw stream produced %d row(s).", len(raw_df))
-                write_with_retry(raw_df, table="orderupdates_rawstream", source="Tables/stream")
-                return "raw done"
-            
-            # Run in parallel
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                futures = [
-                    executor.submit(process_buckets),
-                    executor.submit(process_orders),
-                    executor.submit(process_payments),
-                    executor.submit(process_raw),
+                tasks = [
+                    (bucket_df,  f"orderupdates_rowstream{TABLE_SUFFIX}"),
+                    (orders_df,  f"orderupdates_orderstream{TABLE_SUFFIX}"),
+                    (payments_df, f"orderupdates_paymentstream{TABLE_SUFFIX}")
                 ]
+
+                futures = {
+                    executor.submit(write_with_retry, df, table, "Tables/stream"): (df, table)
+                    for df, table in tasks
+                }
+
                 for future in concurrent.futures.as_completed(futures):
-                    logging.info(future.result())
+                    df, table = futures[future]
+                    try:
+                        future.result()
+                        logging.info(f"Written {table} with rows: {df.num_rows}")
+                    except Exception as e:
+                        logging.error(f"Failed writing {table}: {e}")
+                        raise
 
         except Exception as e:
             if not skip_general_deadletter:

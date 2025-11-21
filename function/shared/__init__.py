@@ -27,17 +27,17 @@ def upload_to_inbound_storage(path: str, content: str | bytes | Iterable[AnyStr]
     return result
 
 
-def write_with_retry(df, table, source, max_attempts=4, base_sleep=2.5):
+def write_with_retry(df, table, source, max_attempts=6, base_sleep=1.5):
     attempt = 1
     while True:
         try:
             write_delta(df, table=table, source=source)   # your existing helper
             return
-        except DeltaError as e:
+        except Exception as e:
             msg = str(e)
             if attempt >= max_attempts:
                 raise
-            sleep_s = base_sleep * (2 ** (attempt-1)) + random.uniform(0, 1.5)
+            sleep_s = base_sleep * (2 ** (attempt-1)) + random.uniform(0, 2.5)
             logging.warning("Transient Delta open/write error (%s). Retry %d/%d in %.1fs",
                             table, attempt, max_attempts, sleep_s)
             time.sleep(sleep_s)
@@ -47,6 +47,7 @@ def write_with_retry(df, table, source, max_attempts=4, base_sleep=2.5):
 def write_delta(data, table, source="Files"):
     """Write documents to Delta Lake."""
     data_path = f"abfss://{default_container}@{data_endpoint}/{source}/{table}"
+    logging.info(f"Writing to Delta Lake table: {table} in source: {source}, path: {data_path}")
     #abfss://exploring_local_compute@onelake.dfs.fabric.microsoft.com/Gold.Lakehouse/Tables/customer'
     #abfss://fb736e26-5db5-424b-8125-6f2ab29a83f0@onelake.dfs.fabric.microsoft.com/408d8412-c973-46aa-8c0c-52dbe1c38ada/Files/orderupdates
     # delta_token = credential.get_token("https://storage.azure.com/.default").token
