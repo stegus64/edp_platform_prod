@@ -271,6 +271,9 @@ def eventhub_trigger(event: List[func.EventHubEvent]) -> None:
     - Transforms with DuckDB (exploding nested arrays)
     - Persists to Delta via shared.write_delta
     """
+
+    logging.info("EventHub trigger function started processing.")
+    
     if not event:
         logging.info("EventHub trigger invoked with an empty batch; nothing to do.")
         return
