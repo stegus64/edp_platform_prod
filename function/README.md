@@ -48,7 +48,7 @@ Each function is implemented in its own folder and exposes an Azure Functions en
 
 ```powershell
 # from the `function` folder
-func azure functionapp publish func-edp-prod-01 --build remote
+func azure functionapp publish func-edp-prod-01 --build remote --python
 ```
 
 Ensure production connection strings and configuration are set in the Function App's Application Settings in Azure (do not use `local.settings.json` in production). You may also use `az` commands to manage app settings and deployments if needed.
