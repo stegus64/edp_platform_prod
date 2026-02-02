@@ -43,7 +43,7 @@ BEGIN
             ROW_NUMBER() OVER (PARTITION BY row_bk ORDER BY source_updated_datetime DESC) AS rn
         FROM "lh_edp_prod"."stream"."orderupdates_rowstream"
         --where source_updated_datetime > (select max(source_updated_datetime) from [wh_edp_prod].[dbo].[orderupdated_row])
-        where source_updated_datetime > DATEADD(MINUTE, -5, (SELECT MAX(source_updated_datetime) FROM [wh_edp_prod].[dbo].[orderupdated_row]))
+        where source_updated_datetime > DATEADD(MINUTE, -15, (SELECT MAX(source_updated_datetime) FROM [wh_edp_prod].[dbo].[orderupdated_row]))
     ),
     dedup AS (
         SELECT * FROM base WHERE rn = 1

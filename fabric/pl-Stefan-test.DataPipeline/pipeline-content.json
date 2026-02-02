@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "activities": [
+      {
+        "name": "Run sp_main",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "storedProcedureName": "[dbo].[sp_main]"
+        },
+        "linkedService": {
+          "name": "wh_edp_prod",
+          "properties": {
+            "annotations": [],
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "endpoint": "32boitri625etog22senr3d4uu-ezxhh65vlvfufajfn4vlfgud6a.datawarehouse.fabric.microsoft.com",
+              "artifactId": "390f60f5-568a-4d4d-84fb-c5b6c6ff05af",
+              "workspaceId": "fb736e26-5db5-424b-8125-6f2ab29a83f0"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

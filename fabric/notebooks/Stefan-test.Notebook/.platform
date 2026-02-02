@@ -2,11 +2,10 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
   "metadata": {
     "type": "Notebook",
-    "displayName": "1.1 orderupdated-prod microbatch_continous",
-    "description": "New notebook"
+    "displayName": "Stefan-test"
   },
   "config": {
     "version": "2.0",
-    "logicalId": "8c4ab69f-467d-ac5a-4248-0bd544b86041"
+    "logicalId": "06e97c04-5178-8a24-4fd9-8472b9680889"
   }
 }

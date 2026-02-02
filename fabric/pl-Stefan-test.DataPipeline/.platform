@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "DataPipeline",
+    "displayName": "pl-Stefan-test",
+    "description": "Kör sp_main var 5:e minut. Ersätter den tidigare pipelinen som ägdes av magnus och har slutat fungera korrekt"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "4a3670f5-1068-b707-4218-45fbabf573f1"
+  }
+}

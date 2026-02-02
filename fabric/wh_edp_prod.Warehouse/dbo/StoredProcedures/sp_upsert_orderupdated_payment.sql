@@ -17,7 +17,7 @@ BEGIN
 			[orderNumber],
 			ROW_NUMBER() OVER (PARTITION BY payment_bk ORDER BY EventEnqueuedUtcTime DESC) AS rn
 		FROM [lh_edp_prod].[stream].[orderupdates_paymentstream]
-		WHERE EventEnqueuedUtcTime > DATEADD(MINUTE, -5, (SELECT MAX(EventEnqueuedUtcTime) FROM [wh_edp_prod].[dbo].[orderupdated_payment]))
+		WHERE EventEnqueuedUtcTime > DATEADD(MINUTE, -15, (SELECT MAX(EventEnqueuedUtcTime) FROM [wh_edp_prod].[dbo].[orderupdated_payment]))
 	),
 	dedup AS (
 		SELECT * FROM base WHERE rn = 1

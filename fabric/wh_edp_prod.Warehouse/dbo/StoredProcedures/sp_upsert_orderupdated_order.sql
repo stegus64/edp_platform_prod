@@ -38,7 +38,7 @@ BEGIN
 			[status_title],
 			ROW_NUMBER() OVER (PARTITION BY order_bk ORDER BY EventEnqueuedUtcTime DESC) AS rn
 		FROM [lh_edp_prod].[stream].[orderupdates_orderstream]
-		WHERE EventEnqueuedUtcTime > DATEADD(MINUTE, -5 ,(SELECT MAX(EventEnqueuedUtcTime) FROM [wh_edp_prod].[dbo].[orderupdated_order]))
+		WHERE EventEnqueuedUtcTime > DATEADD(MINUTE, -15 ,(SELECT MAX(EventEnqueuedUtcTime) FROM [wh_edp_prod].[dbo].[orderupdated_order]))
 	),
 	dedup AS (
 		SELECT * FROM base WHERE rn = 1
