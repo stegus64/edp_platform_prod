@@ -2,24 +2,6 @@
   "properties": {
     "activities": [
       {
-        "name": "OrderUpdated - Micro Batch PROD",
-        "type": "TridentNotebook",
-        "state": "Inactive",
-        "onInactiveMarkAs": "Succeeded",
-        "dependsOn": [],
-        "policy": {
-          "timeout": "0.12:00:00",
-          "retry": 0,
-          "retryIntervalInSeconds": 30,
-          "secureOutput": false,
-          "secureInput": false
-        },
-        "typeProperties": {
-          "notebookId": "c39a599a-ac19-4361-9417-bc9dc68c19a1",
-          "workspaceId": "fb736e26-5db5-424b-8125-6f2ab29a83f0"
-        }
-      },
-      {
         "name": "main",
         "type": "SqlServerStoredProcedure",
         "dependsOn": [],
@@ -33,7 +15,7 @@
         "typeProperties": {
           "storedProcedureName": "[dbo].[sp_main]"
         },
-        "connectionSettings": {
+        "linkedService": {
           "name": "wh_edp_prod",
           "properties": {
             "annotations": [],
@@ -42,58 +24,8 @@
               "endpoint": "32boitri625etog22senr3d4uu-ezxhh65vlvfufajfn4vlfgud6a.datawarehouse.fabric.microsoft.com",
               "artifactId": "390f60f5-568a-4d4d-84fb-c5b6c6ff05af",
               "workspaceId": "fb736e26-5db5-424b-8125-6f2ab29a83f0"
-            },
-            "externalReferences": {
-              "connection": "f9642796-38c2-4ee2-92e1-27639c5368c9"
             }
           }
-        }
-      },
-      {
-        "name": "stream_alerter",
-        "type": "TridentNotebook",
-        "state": "Inactive",
-        "onInactiveMarkAs": "Failed",
-        "dependsOn": [],
-        "policy": {
-          "timeout": "0.12:00:00",
-          "retry": 0,
-          "retryIntervalInSeconds": 30,
-          "secureOutput": false,
-          "secureInput": false
-        },
-        "typeProperties": {
-          "notebookId": "838db9bd-908d-4f96-a2fe-cc7e25b6d4e6",
-          "workspaceId": "fb736e26-5db5-424b-8125-6f2ab29a83f0"
-        }
-      },
-      {
-        "name": "Stream data alert",
-        "type": "Office365Email",
-        "state": "Inactive",
-        "onInactiveMarkAs": "Succeeded",
-        "dependsOn": [
-          {
-            "activity": "stream_alerter",
-            "dependencyConditions": [
-              "Failed"
-            ]
-          }
-        ],
-        "policy": {
-          "timeout": "0.12:00:00",
-          "retry": 0,
-          "retryIntervalInSeconds": 30,
-          "secureOutput": false,
-          "secureInput": false
-        },
-        "typeProperties": {
-          "to": "magnus.jonsson@ellos.com",
-          "subject": "No stream data, last 1 hour",
-          "body": "<p>Please check Fabric event stream for issues</p>"
-        },
-        "externalReferences": {
-          "connection": "f94cf481-f552-46f8-8559-c32d88a4aca4"
         }
       }
     ],
