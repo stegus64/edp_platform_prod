@@ -1,4 +1,4 @@
-CREATE   PROCEDURE [dbo].[sp_upsert_orderupdated_row]
+CREATE     PROCEDURE [dbo].[sp_upsert_orderupdated_row]
 AS
 BEGIN
 
@@ -43,7 +43,7 @@ BEGIN
             ROW_NUMBER() OVER (PARTITION BY row_bk ORDER BY source_updated_datetime DESC) AS rn
         FROM "lh_edp_prod"."stream"."orderupdates_rowstream"
         --where source_updated_datetime > (select max(source_updated_datetime) from [wh_edp_prod].[dbo].[orderupdated_row])
-        where source_updated_datetime > DATEADD(MINUTE, -15, (SELECT MAX(source_updated_datetime) FROM [wh_edp_prod].[dbo].[orderupdated_row]))
+        where updated_datetime > DATEADD(MINUTE, -15, (SELECT MAX(updated_datetime) FROM [wh_edp_prod].[dbo].[orderupdated_row]))
     ),
     dedup AS (
         SELECT * FROM base WHERE rn = 1
@@ -51,7 +51,7 @@ BEGIN
     MERGE [wh_edp_prod].[dbo].[orderupdated_row] AS target
     USING dedup AS source
     ON target.[row_bk] = source.[row_bk]
-    WHEN MATCHED THEN
+    WHEN MATCHED AND target.source_updated_datetime < source.source_updated_datetime THEN
         UPDATE SET
             target.[bucket_bk] = source.[bucket_bk],
             target.[orderNumber] = source.[orderNumber],

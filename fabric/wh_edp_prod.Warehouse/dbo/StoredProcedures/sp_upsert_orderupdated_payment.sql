@@ -1,4 +1,4 @@
-CREATE   PROCEDURE [dbo].[sp_upsert_orderupdated_payment]
+CREATE     PROCEDURE [dbo].[sp_upsert_orderupdated_payment]
 AS
 BEGIN
 	WITH base AS (
@@ -17,7 +17,7 @@ BEGIN
 			[orderNumber],
 			ROW_NUMBER() OVER (PARTITION BY payment_bk ORDER BY EventEnqueuedUtcTime DESC) AS rn
 		FROM [lh_edp_prod].[stream].[orderupdates_paymentstream]
-		WHERE EventEnqueuedUtcTime > DATEADD(MINUTE, -15, (SELECT MAX(EventEnqueuedUtcTime) FROM [wh_edp_prod].[dbo].[orderupdated_payment]))
+		WHERE updated_datetime > DATEADD(MINUTE, -15, (SELECT MAX(updated_datetime) FROM [wh_edp_prod].[dbo].[orderupdated_payment]))
 	),
 	dedup AS (
 		SELECT * FROM base WHERE rn = 1
@@ -26,7 +26,7 @@ BEGIN
 	MERGE [wh_edp_prod].[dbo].[orderupdated_payment] AS target
 	USING dedup AS source
 	ON target.[payment_bk] = source.[payment_bk]
-	WHEN MATCHED THEN
+	WHEN MATCHED AND target.EventEnqueuedUtcTime < source.EventEnqueuedUtcTime THEN
 		UPDATE SET
 			target.[pspReference] = source.[pspReference],
 			target.[EventEnqueuedUtcTime] = source.[EventEnqueuedUtcTime],

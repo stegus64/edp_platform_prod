@@ -1,4 +1,4 @@
-CREATE   PROCEDURE [dbo].[sp_upsert_orderupdated_order]
+CREATE     PROCEDURE [dbo].[sp_upsert_orderupdated_order]
 AS
 BEGIN
 	WITH base AS (
@@ -38,7 +38,7 @@ BEGIN
 			[status_title],
 			ROW_NUMBER() OVER (PARTITION BY order_bk ORDER BY EventEnqueuedUtcTime DESC) AS rn
 		FROM [lh_edp_prod].[stream].[orderupdates_orderstream]
-		WHERE EventEnqueuedUtcTime > DATEADD(MINUTE, -15 ,(SELECT MAX(EventEnqueuedUtcTime) FROM [wh_edp_prod].[dbo].[orderupdated_order]))
+		WHERE updated_datetime > DATEADD(MINUTE, -15 ,(SELECT MAX(updated_datetime) FROM [wh_edp_prod].[dbo].[orderupdated_order]))
 	),
 	dedup AS (
 		SELECT * FROM base WHERE rn = 1
@@ -47,7 +47,7 @@ BEGIN
 	MERGE [wh_edp_prod].[dbo].[orderupdated_order] AS target
 	USING dedup AS source
 	ON target.[order_bk] = source.[order_bk]
-	WHEN MATCHED THEN
+	WHEN MATCHED AND target.EventEnqueuedUtcTime < source.EventEnqueuedUtcTime THEN
 		UPDATE SET
 			target.[orderNumber] = source.[orderNumber],
 			target.[status_value] = source.[status_value],
