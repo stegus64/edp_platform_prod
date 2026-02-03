@@ -4,7 +4,7 @@
     "extensions": {
         "eventHubs": {
             "maxEventBatchSize" : 10000,
-            "minEventBatchSize" : 2000,
+            "minEventBatchSize" : 100,
             "maxWaitTime" : "00:02:00"
         }
   },
